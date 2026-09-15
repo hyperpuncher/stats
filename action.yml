@@ -1,0 +1,55 @@
+name: GitHub Stats Card
+description: Render a self-theming GitHub stats card as SVG. One GraphQL call, no npm, no runtime.
+author: hyperpuncher
+
+inputs:
+  username:
+    description: GitHub username to render.
+    required: false
+    default: ${{ github.repository_owner }}
+  output:
+    description: Path of the SVG file to write.
+    required: false
+    default: profile/card.svg
+  theme:
+    description: Palette pair, light then dark. A single name uses that palette in both schemes.
+    required: false
+    default: catppuccin_latte aura
+  langs_count:
+    description: How many languages to list.
+    required: false
+    default: "16"
+  exclude_repos:
+    description: Space separated repo names to leave out of the language card.
+    required: false
+    default: ""
+  token:
+    description: Token used to read GitHub data. Needs read access to the repos you want counted.
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  path:
+    description: Path of the SVG that was written.
+    value: ${{ steps.render.outputs.path }}
+
+runs:
+  using: composite
+  steps:
+    # generate only. this action never writes to your repository, so it can run
+    # with a read-only token and the commit stays in your own workflow.
+    - id: render
+      shell: bash
+      run: |
+        set -euo pipefail
+        bash "${{ github.action_path }}/gen.sh" "${{ inputs.username }}" "${{ inputs.output }}"
+        echo "path=${{ inputs.output }}" >>"$GITHUB_OUTPUT"
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        THEME: ${{ inputs.theme }}
+        LANGS_COUNT: ${{ inputs.langs_count }}
+        EXCLUDE_REPOS: ${{ inputs.exclude_repos }}
+
+branding:
+  icon: bar-chart-2
+  color: blue
