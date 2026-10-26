@@ -134,17 +134,18 @@ Q_TAIL=$(
 EOF
 )
 
-if ! data=$(gh api graphql -f query="$Q_HEAD$year_blocks$Q_TAIL" -F login="$USER_NAME" 2>&1); then
-	echo "github rejected the request: $data" >&2
-	exit 1
-fi
-case $data in
-'{'*) ;;
-*)
-	echo "github returned no json, check the token: ${data:0:300}" >&2
-	exit 1
-	;;
-esac
+# github's edge sometimes answers with a 502 html page, which is neither a
+# valid response nor an auth failure, so retry a few times before giving up.
+tries=0
+until data=$(gh api graphql -f query="$Q_HEAD$year_blocks$Q_TAIL" -F login="$USER_NAME" 2>&1) &&
+	[[ $data == '{'* ]]; do
+	tries=$((tries + 1))
+	if [ "$tries" -ge 3 ]; then
+		echo "github returned no usable json after $tries tries: ${data:0:300}" >&2
+		exit 1
+	fi
+	sleep 5
+done
 
 # a token that cannot read private repos still renders, but the language mix
 # quietly drops to public-only, which looks like a healthy card.
