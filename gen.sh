@@ -122,6 +122,7 @@ Q_TAIL=$(
       pageInfo { hasNextPage }
       nodes {
         name
+        isPrivate
         stargazerCount
         languages(first: 10, orderBy: {field: SIZE, direction: DESC}) {
           edges { size node { name color } }
@@ -133,9 +134,23 @@ Q_TAIL=$(
 EOF
 )
 
-data=$(gh api graphql -f query="$Q_HEAD$year_blocks$Q_TAIL" -F login="$USER_NAME")
+if ! data=$(gh api graphql -f query="$Q_HEAD$year_blocks$Q_TAIL" -F login="$USER_NAME" 2>&1); then
+	echo "github rejected the request: $data" >&2
+	exit 1
+fi
+case $data in
+'{'*) ;;
+*)
+	echo "github returned no json, check the token: ${data:0:300}" >&2
+	exit 1
+	;;
+esac
 
-# one jq pass for every plain scalar, so this section costs a single spawn.
+# a token that cannot read private repos still renders, but the language mix
+# quietly drops to public-only, which looks like a healthy card.
+private=$(jq '[.data.user.repos.nodes[] | select(.isPrivate)] | length' <<<"$data")
+[ "$private" -gt 0 ] ||
+	echo "::warning::no private repos visible. either you have none, or the token cannot read them, and then the language mix is public-only"
 # $days flattens the calendar so the busiest day only walks it once.
 IFS=$'\t' read -r name since stars prs merged issues busiest busiest_date commits nextpage < <(jq -r '
   (.data.user.calendar.contributionCalendar.weeks | map(.contributionDays) | add) as $days

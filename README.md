@@ -46,6 +46,13 @@ jobs:
           set -euo pipefail
           blob=$(gh api "repos/$GITHUB_REPOSITORY/git/blobs" \
             -f content="$(base64 -w0 profile/card.svg)" -f encoding=base64 --jq .sha)
+          # content hashes are stable, so compare first and skip the rest of the
+          # calls on days when nothing about the card changed
+          if [ "$blob" = "$(gh api "repos/$GITHUB_REPOSITORY/contents/card.svg?ref=card" \
+            --jq .sha 2>/dev/null)" ]; then
+            echo "card unchanged"
+            exit 0
+          fi
           tree=$(gh api "repos/$GITHUB_REPOSITORY/git/trees" \
             -f "tree[][path]=card.svg" -f "tree[][mode]=100644" \
             -f "tree[][type]=blob" -f "tree[][sha]=$blob" --jq .sha)
@@ -80,7 +87,7 @@ outputs: `path`, the file that was written.
 
 ## token
 
-All public repos need **nothing**: `github.token` reads your public data. Private repos need one secret, a fine-grained PAT with read-only `Contents` + `Metadata`, passed as `token:`. Never a classic PAT with `repo` scope, which is read _and write_ on everything you can reach.
+`github.token` already counts your private commits, GitHub serves your own restricted contribution counts to your own repo's token, plus all public data. The one thing it cannot see is the language mix of your private repos, a token can only list repos it can reach. For the true mix, add one secret, a fine-grained PAT with read-only `Contents` + `Metadata`, passed as `token:`. Never a classic PAT with `repo` scope, which is read _and write_ on everything you can reach.
 
 The action only reads and never writes to your repository, so a bad future release could leak what your token can already read but cannot push anything. If that matters, use a commit SHA instead of `v1`.
 
